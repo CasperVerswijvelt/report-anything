@@ -24,7 +24,7 @@ await db.write();
 const app = express();
 app.use(express.json());
 
-app.post("/report", async (req, res) => {
+app.post("/api/report", async (req, res) => {
   try {
     db.data.reports.push({
       timestamp: Date.now(),
@@ -38,7 +38,7 @@ app.post("/report", async (req, res) => {
   }
 });
 
-app.get("/reports", async (req, res) => {
+app.get("/api/reports", async (req, res) => {
 
   // Raw data
   const reports = db.data.reports
