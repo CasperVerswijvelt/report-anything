@@ -31,29 +31,42 @@ app.post("/report", async (req, res) => {
       ...req.body,
     });
     await db.write();
-
     res.sendStatus("200");
   } catch (e) {
-    console.log(e);
+    console.error(e);
     res.status(500).send(e);
   }
 });
 
 app.get("/reports", async (req, res) => {
 
-    const reports = db.data.reports
-    const data = [...reports.reduce((a,c)=>{
-        a.set(c.installId, c);
-        return a;
-      }, new Map()).values()];
-      res.send({
-        distribution: {
-            fdroid: data.filter(el => el.distribution === "fdroid").length,
-            playstore: data.filter(el => el.distribution === "playstore").length,
-            github: data.filter(el => el.distribution === "github").length,
-        }
-      })
-  });
+  // Raw data
+  const reports = db.data.reports
+
+  // Unique uuid's
+  const filtered = [...reports.reduce((a, c) => {
+    a.set(c.uuid, c);
+    return a;
+  }, new Map()).values()];
+
+  // Generate report data
+  console.log(filtered)
+  const processed = {}
+  filtered.forEach((el) => {
+    for (const [key, value] of Object.entries(el)) {
+      if (key === "uuid" || key === "timestamp") continue
+
+      const keyCounter = processed[key] ?? {}
+      if (typeof keyCounter[value] === "undefined") keyCounter[value] = 0
+      keyCounter[value]++
+      processed[key] = keyCounter
+    }
+  })
+  res.send({
+    total: filtered.length,
+    properties: processed
+  })
+});
 
 // Start listening for requests
 
