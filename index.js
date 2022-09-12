@@ -73,14 +73,17 @@ app.get("/api/reports", async (_req, res) => {
   const reports = dynamicDb.data.dynamic
   const staticData = staticDb.data.static
 
-  // Unique id's
+  // Unique id's for last 3 days
+  const daysBack = 3
+  const current = Date.now()
   const filtered = [...reports.reduce((a, c) => {
-    a.set(c.id, c);
+    if ((current - c.timestamp) < daysBack * 24 * 60 * 60 * 1000) {
+      a.set(c.id, c);
+    }
     return a;
   }, new Map()).values()];
 
   // Generate report data
-  console.log(filtered)
   const processed = {}
   filtered.forEach((el) => {
 
@@ -108,6 +111,8 @@ app.get("/api/reports", async (_req, res) => {
     properties: processed
   })
 });
+
+app.use('/', express.static(join(dirname(fileURLToPath(import.meta.url)), "public")))
 
 // Start listening for requests
 
