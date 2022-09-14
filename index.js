@@ -26,7 +26,32 @@ if (!dynamicDb.data) {
   dynamicDb.write()
 }
 
+// Schedule db writes every 5 minutes
+setInterval(async () => {
+  if (shouldSaveStatic) {
+    console.log("Writing static db ...")
+    try {
+      await staticDb.write()
+    } catch(e) {
+      console.log(`Error wrigint static db: ${e}`)
+    }
+  }
+  if (shouldSaveDynamic) {
+    console.log("Writing dynamic db ...")
+    try {
+      await dynamicDb.write()
+    } catch(e) {
+      console.log(`Error wrigint dynamic db: ${e}`)
+    }
+  }
+
+  shouldSaveStatic = false
+  shouldSaveDynamic = false
+}, 300000)
+
 let lastId = Object.keys(staticDb.data.static).pop() || 0
+let shouldSaveStatic = false
+let shouldSaveDynamic = false
 
 const app = express();
 app.use(express.json());
@@ -46,7 +71,9 @@ app.post("/api/report", async (req, res) => {
     ...req.body.static
   }
 
-  console.log(`Logging data for id ${id}`)
+  shouldSaveStatic = true
+
+  console.log(`Logged data for id ${id}`)
 
   if (req.body.dynamic) {
     dynamicDb.data.dynamic.push({
@@ -54,17 +81,10 @@ app.post("/api/report", async (req, res) => {
       id: id,
       ...req.body.dynamic,
     });
-  }
 
-  try {
-    // TODO don't do this in the request
-    await staticDb.write();
-    await dynamicDb.write();
-    res.sendStatus("200");
-  } catch (e) {
-    console.error(e);
-    res.status(500).send(e);
+    shouldSaveDynamic = true
   }
+  res.sendStatus("200");
 });
 
 app.get("/api/reports", async (_req, res) => {
