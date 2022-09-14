@@ -55,6 +55,10 @@ let shouldSaveDynamic = false
 
 const app = express();
 app.use(express.json());
+app.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store')
+  next()
+})
 
 app.post("/api/report", async (req, res) => {
 
