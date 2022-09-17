@@ -91,17 +91,20 @@ app.post("/api/report", async (req, res) => {
   res.sendStatus("200");
 });
 
-app.get("/api/reports", async (_req, res) => {
+app.get("/api/reports", async (req, res) => {
+
+  // Query param
+  const querySince = parseInt(req.query.since)
 
   // Raw data
   const reports = dynamicDb.data.dynamic
   const staticData = staticDb.data.static
 
-  // Unique id's for last 3 days
-  const daysBack = 3
+  // Unique id's since given "since" query parameter, fallback to 3 days back
+  const since = querySince ?? current - 3 * 24 * 60 * 60 * 1000
   const current = Date.now()
   const filtered = [...reports.reduce((a, c) => {
-    if ((current - c.timestamp) < daysBack * 24 * 60 * 60 * 1000) {
+    if (c.timestamp >= since) {
       a.set(c.id, c);
     }
     return a;
