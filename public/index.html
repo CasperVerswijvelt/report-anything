@@ -3,15 +3,252 @@
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width">
+    <meta name="viewport" content="width=device-width" />
     <title>Report anything</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script defer>
-      fetch("/api/reports")
-        .then((response) => response.json())
-        .then(handleReports);
+    <style>
+      /* Generic */
+      .absolute-center {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      /* General */
+      :root {
+        --text-color: rgb(44, 44, 44);
+      }
+      * {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+      }
+      body,
+      html {
+        height: 100%;
+      }
+      body {
+        padding: 0 15px;
+        box-sizing: border-box;
+        background: rgb(235 235 235);
+        display: flex;
+        flex-direction: column;
+      }
+      .title {
+        color: var(--text-color);
+        text-align: center;
+        padding: 25px 0;
+      }
+      #count:empty::before {
+        content: "…";
+      }
+
+      /* charts section */
+      .charts-container {
+        flex-grow: 1;
+        position: relative;
+        padding: 15px 0;
+      }
+      #charts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 25px;
+        box-sizing: border-box;
+        flex-grow: 1;
+      }
+      body:not(.loading):not(.error) #charts:empty::after {
+        content: "No data";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: #787878;
+      }
+      .chart {
+        box-sizing: border-box;
+        background-color: rgb(255, 255, 255);
+        border-radius: 15px;
+        box-shadow: 0px 0px 10px rgb(0 0 0 / 10%);
+        overflow: hidden;
+        padding: 10px;
+      }
+      @media (min-width: 700px) {
+        body {
+          margin: 0 auto;
+          max-width: 900px;
+        }
+        #charts {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      /* Time period selector */
+      .timeperiod-selector {
+        display: flex;
+        justify-content: center;
+        padding-bottom: 7px;
+      }
+      .timeperiod-selector label {
+        padding: 0 10px;
+        cursor: pointer;
+      }
+      .timeperiod-selector span::after {
+        content: "";
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        height: 2.5px;
+        width: 0;
+        transition: all 0.3s;
+      }
+      .timeperiod-selector label:hover span::after {
+        background-color: rgb(185, 185, 185);
+        width: 100%;
+      }
+      .timeperiod-selector input {
+        appearance: none;
+      }
+      .timeperiod-selector span {
+        position: relative;
+      }
+      .timeperiod-selector input:checked + span::after {
+        transition: background-color 0.3s;
+        background-color: rgb(109, 109, 109);
+        width: 100%;
+      }
+
+      /* Error */
+      .loading-error {
+        display: none;
+        width: 40px;
+        height: 40px;
+        justify-content: center;
+      }
+      .error .loading-error {
+        display: flex;
+      }
+      .loading-error::after,
+      .loading-error::before {
+        content: "";
+        width: 100%;
+        height: 12%;
+        background-color: #ff6262;
+        position: absolute;
+        top: 50%;
+        border-radius: 999px;
+      }
+      .loading-error::after {
+        transform: translateY(-50%) rotate(-45deg);
+      }
+      .loading-error::before {
+        transform: translateY(-50%) rotate(45deg);
+      }
+      .loading-error span {
+        position: absolute;
+        top: 100%;
+        padding-top: 8px;
+        width: 300px;
+        max-width: 100vw;
+        text-align: center;
+        color: #a38484;
+      }
+
+      /* Spinner visibility */
+      .loading-spinner {
+        display: none;
+      }
+      .loading .loading-spinner {
+        display: block;
+      }
+
+      /* Spinner from https://tobiasahlin.com/spinkit/ */
+      .spinner {
+        width: 40px;
+        height: 40px;
+        margin: 100px auto;
+        background-color: rgba(0, 0, 0, 0.274);
+
+        border-radius: 100%;
+        -webkit-animation: sk-scaleout 1s infinite ease-in-out;
+        animation: sk-scaleout 1s infinite ease-in-out;
+      }
+
+      @-webkit-keyframes sk-scaleout {
+        0% {
+          -webkit-transform: scale(0);
+        }
+        100% {
+          -webkit-transform: scale(1);
+          opacity: 0;
+        }
+      }
+
+      @keyframes sk-scaleout {
+        0% {
+          -webkit-transform: scale(0);
+          transform: scale(0);
+        }
+        100% {
+          -webkit-transform: scale(1);
+          transform: scale(1);
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="title">Total: <span id="count"></span></h1>
+    <div class="timeperiod-selector">
+      <label>
+        <input type="radio" name="period" onclick="setTimePeriod(7)" />
+        <span>7 days</span>
+      </label>
+      <label>
+        <input type="radio" name="period" onclick="setTimePeriod(3)" checked />
+        <span>3 days</span>
+      </label>
+      <label>
+        <input type="radio" name="period" onclick="setTimePeriod(1)" />
+        <span>1 day</span>
+      </label>
+    </div>
+    <div class="charts-container">
+      <div id="charts"></div>
+      <div class="loading-spinner absolute-center"><div class="spinner"></div></div>
+      <div class="loading-error absolute-center">
+        <span id="error-message"></span>
+      </div>
+    </div>
+    <script>
+      let lastRequestId = 0;
+      getReports(3);
+
+      function getReports(days) {
+        document.getElementById("charts").innerHTML = "";
+        document.getElementById("count").innerText = "";
+        setOverlay(true, false);
+        const requestId = ++lastRequestId;
+        fetch(`/api/reports?since=${Date.now() - days * 24 * 60 * 60 * 1000}`)
+          .then((response) => response.json())
+          .then(onReports, onError);
+
+        function onReports(reports) {
+          // Discard data if new request was started in meantime
+          if (requestId === lastRequestId) {
+            handleReports(reports);
+          }
+        }
+
+        function onError(error) {
+          setOverlay(false, true);
+          document.getElementById("error-message").innerText = error;
+        }
+      }
 
       function handleReports(reports) {
+        setOverlay(false, false);
         // Visualize total unique instances in last 3 days
         document.getElementById("count").innerText = reports.total;
 
@@ -49,9 +286,9 @@
                   text: property,
                   padding: {
                     top: 10,
-                    bottom: 20
-                  }
-                }
+                    bottom: 20,
+                  },
+                },
               },
             },
           });
@@ -62,6 +299,11 @@
         });
 
         document.getElementById("charts").appendChild(fragment);
+      }
+
+      function setOverlay(loading, error) {
+        document.body.classList.toggle("loading", loading);
+        document.body.classList.toggle("error", error);
       }
 
       function getRandomColorArray(length, opacity) {
@@ -75,52 +317,10 @@
       function randomNum() {
         return Math.floor(Math.random() * (235 - 52 + 1) + 52);
       }
+
+      function setTimePeriod(days) {
+        getReports(days);
+      }
     </script>
-    <style>
-      * {
-        font-family: sans-serif;
-        margin: 0;
-        padding: 0;
-      }
-      body {
-        padding: 0 15px;
-        box-sizing: border-box;
-        background: rgb(235 235 235);
-      }
-      #charts {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 25px;
-        padding-bottom: 15px;
-        box-sizing: border-box;
-      }
-      .chart {
-        min-height: 40px;
-        box-sizing: border-box;
-        background-color: rgb(255, 255, 255);
-        border-radius: 15px;
-        box-shadow: 0px 0px 10px rgb(0 0 0 / 10%);
-        overflow: hidden;
-        padding: 10px;
-      }
-      .title {
-        color: rgb(44, 44, 44);
-        text-align: center;
-        padding: 25px 0;
-      }
-      @media (min-width: 700px) {
-        body {
-          margin: 0 auto;
-          max-width: 900px;
-        }
-        #charts {
-          grid-template-columns: repeat(2, 1fr);
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <h1 class="title">Total: <span id="count">...</span></h1>
-    <div id="charts"></div>
   </body>
 </html>
