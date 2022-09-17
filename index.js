@@ -32,7 +32,7 @@ setInterval(async () => {
     console.log("Writing static db ...")
     try {
       await staticDb.write()
-    } catch(e) {
+    } catch (e) {
       console.log(`Error wrigint static db: ${e}`)
     }
   }
@@ -40,7 +40,7 @@ setInterval(async () => {
     console.log("Writing dynamic db ...")
     try {
       await dynamicDb.write()
-    } catch(e) {
+    } catch (e) {
       console.log(`Error wrigint dynamic db: ${e}`)
     }
   }
@@ -114,24 +114,41 @@ app.get("/api/reports", async (req, res) => {
   const processed = {}
   filtered.forEach((el) => {
 
+    // Merge static and dynamic data
     const mergedEl = {
       ...el,
       ...staticData[el.id]
     }
-    for (const [key, value] of Object.entries(mergedEl)) {
 
+    // Loop over properties
+    Object.entries(mergedEl).forEach(([key, value]) => {
+
+      // Ignore "uuid" (unique identifier in static data),
+      //  "id" (link dynamic to static data) and
+      //  "timestamp" (only used for time filtering)
       switch (key) {
         case "uuid":
         case "id":
         case "timestamp":
-          continue
+          return
       }
 
-      const keyCounter = processed[key] ?? {}
-      if (typeof keyCounter[value] === "undefined") keyCounter[value] = 0
-      keyCounter[value]++
-      processed[key] = keyCounter
-    }
+      const valueCounter = processed[key] ?? {}
+      if (typeof value === "object") {
+        // Property that can have combination of multiple values
+        Object.entries(value).forEach(([innerValue, isActive]) => {
+          if (isActive) {
+            if (typeof valueCounter[innerValue] === "undefined") valueCounter[innerValue] = 0
+            valueCounter[innerValue]++
+          }
+        })
+      } else {
+        // Property that can only have single value
+        if (typeof valueCounter[value] === "undefined") valueCounter[value] = 0
+        valueCounter[value]++
+      }
+      processed[key] = valueCounter
+    })
   })
   res.send({
     total: filtered.length,
@@ -139,10 +156,10 @@ app.get("/api/reports", async (req, res) => {
   })
 });
 
+// Serve static webpage
 app.use('/', express.static(join(dirname(fileURLToPath(import.meta.url)), "public")))
 
 // Start listening for requests
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

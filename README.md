@@ -12,6 +12,8 @@ You can run this either using the docker image (casperverswijvelt/report-anythin
 
 Log data to the database using this call. Static data is data that does not change for a given reported instance, e.g. brand and model name of a smartphone. Dynamic data, well, **does** change, e.g. application version, language, OS version.
 
+As key/value pairs you can have properties that can have just a single value (see "language" in example below), or properties that can have multiple values (see "tiles" in example below). Each individual property will result in a bar chart on the webpage.
+
 
 Minimal required data:
 ```
@@ -25,16 +27,22 @@ Minimal required data:
 Example:
 ```
 {
-    "static" {
-        "uuid": "a3b0bfeb-c651-4cb8-919f-ebab02f5089b",
-        "brand": "Google",
-        "Model": "Pixel 6"
-    },
-    "dynamic": {
-        "version": "v2.4.0",
-        "sdkLevel": 33,
-        "language": "en"
-    }
+   "static" {
+      "uuid": "a3b0bfeb-c651-4cb8-919f-ebab02f5089b",
+      "brand": "Google",
+      "Model": "Pixel 6"
+   },
+   "dynamic": {
+     "version": "v2.4.0",
+     "sdkLevel": 33,
+     "language": "en",
+     "tiles": {
+         "internet": false,
+         "wifi": true,
+         "data": true,
+         "nfc": false
+      }
+   }
 }
 ```
 
@@ -80,6 +88,12 @@ Example response:
          "SM-G981U1":2,
          "Pixel 5":2,
          "sdk_goog3_x86_64":4
+      },
+      "tiles": {
+         "internet": 6,
+         "data": 5,
+         "nfc": 4,
+         "wifi": 8
       }
    }
 }
