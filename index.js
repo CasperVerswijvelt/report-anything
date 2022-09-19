@@ -27,13 +27,13 @@ if (!dynamicDb.data) {
 }
 
 // Schedule db writes every 5 minutes
-setInterval(async () => {
+const writeDb = async () => {
   if (shouldSaveStatic) {
     console.log("Writing static db ...")
     try {
       await staticDb.write()
     } catch (e) {
-      console.log(`Error wrigint static db: ${e}`)
+      console.log(`Error writing static db: ${e}`)
     }
   }
   if (shouldSaveDynamic) {
@@ -41,13 +41,14 @@ setInterval(async () => {
     try {
       await dynamicDb.write()
     } catch (e) {
-      console.log(`Error wrigint dynamic db: ${e}`)
+      console.log(`Error writing dynamic db: ${e}`)
     }
   }
 
   shouldSaveStatic = false
   shouldSaveDynamic = false
-}, 300000)
+}
+setInterval(writeDb, 300000)
 
 let lastId = Object.keys(staticDb.data.static).pop() || 0
 let shouldSaveStatic = false
@@ -162,4 +163,10 @@ app.use('/', express.static(join(dirname(fileURLToPath(import.meta.url)), "publi
 // Start listening for requests
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT')
+  await writeDb()
+  process.exit()
 });
