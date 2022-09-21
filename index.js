@@ -104,16 +104,21 @@ app.get("/api/reports", async (req, res) => {
   // Unique id's since given "since" query parameter, fallback to 3 days back
   const current = Date.now()
   const since = querySince ? querySince : current - 3 * 24 * 60 * 60 * 1000
-  const filtered = [...reports.reduce((a, c) => {
-    if (c.timestamp >= since) {
-      a.set(c.id, c);
+  const filtered = {}
+  const length = reports.length
+  for (let i = length - 1; i > 0; i--) {
+    const report = reports[i]
+    if (report.timestamp >= since) {
+      if (!filtered[report.id]) filtered[report.id] = report
+    } else {
+      break
     }
-    return a;
-  }, new Map()).values()];
+  }
+  const filteredValues = Object.values(filtered)
 
   // Generate report data
   const processed = {}
-  filtered.forEach((el) => {
+  filteredValues.forEach((el) => {
 
     // Merge static and dynamic data
     const mergedEl = {
@@ -152,7 +157,7 @@ app.get("/api/reports", async (req, res) => {
     })
   })
   res.send({
-    total: filtered.length,
+    total: filteredValues.length,
     properties: processed
   })
 });
