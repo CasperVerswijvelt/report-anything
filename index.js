@@ -102,8 +102,8 @@ app.get("/api/reports", async (req, res) => {
   const staticData = staticDb.data.static
 
   // Unique id's since given "since" query parameter, fallback to 3 days back
-  const since = querySince ?? current - 3 * 24 * 60 * 60 * 1000
   const current = Date.now()
+  const since = querySince ? querySince : current - 3 * 24 * 60 * 60 * 1000
   const filtered = [...reports.reduce((a, c) => {
     if (c.timestamp >= since) {
       a.set(c.id, c);
