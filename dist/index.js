@@ -54,7 +54,7 @@ if (!dynamicDb.data) {
 }
 // Schedule db writes every 5 minutes
 const writeDb = async () => {
-    if (true) {
+    if (shouldSaveStatic) {
         console.log("Writing static db ...");
         try {
             await staticDb.write();
@@ -63,7 +63,7 @@ const writeDb = async () => {
             console.log(`Error writing static db: ${e}`);
         }
     }
-    if (true) {
+    if (shouldSaveDynamic) {
         console.log("Writing dynamic db ...");
         try {
             await dynamicDb.write();
@@ -75,7 +75,7 @@ const writeDb = async () => {
     shouldSaveStatic = false;
     shouldSaveDynamic = false;
 };
-setInterval(writeDb, 10000);
+setInterval(writeDb, 300000);
 const lastTextId = Object.keys(staticDb.data.static).pop();
 let lastId = lastTextId && parseInt(lastTextId) || 0;
 let shouldSaveStatic = false;
