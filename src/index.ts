@@ -1,5 +1,5 @@
 import { join, dirname } from "path";
-import { Low, JSONFile, Adapter, TextFile } from "lowdb";
+import { Low, Adapter, TextFile } from "lowdb";
 import { fileURLToPath } from "url";
 import express from "express";
 
