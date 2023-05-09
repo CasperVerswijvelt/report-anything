@@ -11,8 +11,9 @@ ENV PORT = 3000
 COPY package*.json ./
 
 RUN npm ci --only=production
+RUN npm run build
 
 # Bundle app source
 COPY . .
 
-CMD [ "node", "index.js" ]
+CMD [ "npm", "start" ]

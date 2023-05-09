@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width" />
     <title>Report anything</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
     <style>
       /* Generic */
       .absolute-center {
@@ -224,6 +226,9 @@
       </div>
     </div>
     <script>
+
+      Chart.register(ChartDataLabels);
+
       let lastRequestId = 0;
       getReports(3);
 
@@ -258,15 +263,21 @@
         const entries = Object.entries(reports.properties);
         const length = entries.length;
         Object.entries(reports.properties).forEach(([property, value]) => {
+          console.log(Object.entries(value).sort(([k1, v1], [k2, v2]) => v2 - v1))
+          const limitedValue = Object.fromEntries(
+            Object.entries(value).sort(([k1, v1], [k2, v2]) => v2 - v1).slice(0, 10)
+          )
+          console.log(limitedValue)
           const chartElement = document.createElement("canvas");
           const chart = new Chart(chartElement.getContext("2d"), {
+            plugins: [ChartDataLabels],
             type: "bar",
             data: {
-              labels: Object.keys(value),
+              labels: Object.keys(limitedValue),
               datasets: [
                 {
                   label: property,
-                  data: Object.values(value),
+                  data: Object.values(limitedValue),
                   backgroundColor: getRandomColorArray(length, 0.5),
                 },
               ],
@@ -290,6 +301,10 @@
                     top: 10,
                     bottom: 20,
                   },
+                },
+                datalabels: {
+                  anchor: "end",
+                  align: "end"
                 },
               },
             },

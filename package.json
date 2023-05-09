@@ -5,12 +5,17 @@
   },
   "name": "report-anything",
   "version": "1.2.3",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "run": "node index.js"
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "author": "",
   "license": "ISC",
   "description": "",
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.1.1"
+  }
 }
