@@ -10,7 +10,7 @@ ENV PORT = 3000
 # where available (npm@5+)
 COPY package*.json ./
 
-RUN npm ci --only=production
+RUN npm ci
 RUN npm run build
 
 # Bundle app source
