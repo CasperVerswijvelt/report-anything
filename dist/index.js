@@ -76,51 +76,23 @@ const writeDb = async () => {
     shouldSaveDynamic = false;
 };
 setInterval(writeDb, 300000);
-const lastTextId = Object.keys(staticDb.data.static).pop();
-let lastId = lastTextId && parseInt(lastTextId) || 0;
-let shouldSaveStatic = false;
-let shouldSaveDynamic = false;
-const app = express();
-app.use(express.json());
-app.use((_req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    next();
-});
-app.post("/api/report", async (req, res) => {
-    if (!req.body.static || !req.body.static.uuid) {
-        return res.status(400).send("Must contain  static data with at least a unique identifier (uuid)");
-    }
-    const existingStaticElementId = Object.keys(staticDb.data.static)
-        .find(key => { var _a; return ((_a = staticDb.data.static[key]) === null || _a === void 0 ? void 0 : _a.uuid) === req.body.static.uuid; });
-    const id = existingStaticElementId && parseInt(existingStaticElementId) || ++lastId;
-    staticDb.data.static[id] = Object.assign(Object.assign({}, staticDb.data.static[id]), req.body.static);
-    shouldSaveStatic = true;
-    console.log(`Logged data for id ${id}`);
-    if (req.body.dynamic) {
-        dynamicDb.data.dynamic.push(Object.assign({ timestamp: Date.now(), id: id }, req.body.dynamic));
-        shouldSaveDynamic = true;
-    }
-    res.sendStatus(200);
-});
-app.get("/api/reports", async (req, res) => {
-    // Query param
-    const querySince = parseInt(req.query.since);
-    // Raw data
-    const reports = dynamicDb.data.dynamic;
-    const staticData = staticDb.data.static;
-    // Unique id's since given "since" query parameter, fallback to 3 days back
-    const current = Date.now();
-    const since = querySince ? querySince : current - 3 * 24 * 60 * 60 * 1000;
+const getStats = (reports, staticData, fromTimestamp, toTimestamp) => {
+    const firstTimestamp = reports[0].timestamp;
+    if (fromTimestamp < firstTimestamp && toTimestamp < firstTimestamp)
+        return null;
     const filtered = {};
     const length = reports.length;
     for (let i = length - 1; i > 0; i--) {
         const report = reports[i];
-        if (report.timestamp >= since) {
+        const afterFromTimestamp = report.timestamp >= fromTimestamp;
+        const beforeToTimestamp = report.timestamp <= toTimestamp;
+        if (!afterFromTimestamp && !beforeToTimestamp) {
+            break;
+        }
+        else if (afterFromTimestamp && beforeToTimestamp) {
+            // If no report for this id is set yet, save it
             if (!filtered[report.id])
                 filtered[report.id] = report;
-        }
-        else {
-            break;
         }
     }
     const filteredValues = Object.values(filtered);
@@ -161,10 +133,75 @@ app.get("/api/reports", async (req, res) => {
             processed[key] = valueCounter;
         });
     });
-    res.send({
+    return {
         total: filteredValues.length,
         properties: processed
-    });
+    };
+};
+const parseNumber = (queryParam, fallback) => {
+    const parsed = parseInt(queryParam);
+    return isNaN(parsed) ? fallback : parsed;
+};
+const lastTextId = Object.keys(staticDb.data.static).pop();
+let lastId = lastTextId && parseInt(lastTextId) || 0;
+let shouldSaveStatic = false;
+let shouldSaveDynamic = false;
+const app = express();
+app.use(express.json());
+app.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+});
+app.post("/api/report", async (req, res) => {
+    if (!req.body.static || !req.body.static.uuid) {
+        return res.status(400).send("Must contain  static data with at least a unique identifier (uuid)");
+    }
+    const existingStaticElementId = Object.keys(staticDb.data.static)
+        .find(key => { var _a; return ((_a = staticDb.data.static[key]) === null || _a === void 0 ? void 0 : _a.uuid) === req.body.static.uuid; });
+    const id = existingStaticElementId && parseInt(existingStaticElementId) || ++lastId;
+    staticDb.data.static[id] = Object.assign(Object.assign({}, staticDb.data.static[id]), req.body.static);
+    shouldSaveStatic = true;
+    console.log(`Logged data for id ${id}`);
+    if (req.body.dynamic) {
+        dynamicDb.data.dynamic.push(Object.assign({ timestamp: Date.now(), id: id }, req.body.dynamic));
+        shouldSaveDynamic = true;
+    }
+    res.sendStatus(200);
+});
+app.get("/api/reports", async (req, res) => {
+    // Query param
+    const querySince = parseInt(req.query.since);
+    // Raw data
+    const reports = dynamicDb.data.dynamic;
+    const staticData = staticDb.data.static;
+    // Unique id's since given "since" query parameter, fallback to 3 days back
+    const current = Date.now();
+    const fromTimestamp = querySince ? querySince : current - 3 * 24 * 60 * 60 * 1000;
+    const toTimestamp = current;
+    const stats = getStats(reports, staticData, fromTimestamp, toTimestamp);
+    res.send(stats);
+});
+app.get("/api/history", async (req, res) => {
+    // Query param
+    const range = parseNumber(req.query.range, 3 * 24 * 60 * 60 * 1000);
+    const limit = parseNumber(req.query.limit, 100);
+    // Raw data
+    const reports = dynamicDb.data.dynamic;
+    const staticData = staticDb.data.static;
+    const now = Date.now();
+    const history = {};
+    let current = now - range;
+    let count = 0;
+    while (true) {
+        const stats = getStats(reports, staticData, current, current + range);
+        if (!stats)
+            break;
+        history[current] = stats;
+        if (++count > limit)
+            break;
+        current -= range;
+    }
+    res.send(history);
 });
 // Serve static webpage
 app.use('/', express.static(join(dirname(fileURLToPath(import.meta.url)), "../public")));

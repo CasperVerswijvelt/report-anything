@@ -67,6 +67,92 @@ const writeDb = async () => {
 }
 setInterval(writeDb, 300000)
 
+type PropertyCounter = {
+  [key: string]: { [key: string]: number }
+}
+type Stats = {
+  total: number,
+  properties: PropertyCounter
+}
+
+const getStats = (
+  reports: any,
+  staticData: any,
+  fromTimestamp: number,
+  toTimestamp: number
+): Stats | null => {
+
+  const firstTimestamp = reports[0].timestamp
+  if (fromTimestamp < firstTimestamp && toTimestamp < firstTimestamp) return null
+
+  const filtered: any = {}
+  const length = reports.length
+  for (let i = length - 1; i > 0; i--) {
+    const report = reports[i]
+    const afterFromTimestamp = report.timestamp >= fromTimestamp
+    const beforeToTimestamp = report.timestamp <= toTimestamp
+
+    if (!afterFromTimestamp && !beforeToTimestamp) {
+      break
+    } else if (afterFromTimestamp && beforeToTimestamp) {
+      // If no report for this id is set yet, save it
+      if (!filtered[report.id]) filtered[report.id] = report
+    }
+  }
+  const filteredValues: any[] = Object.values(filtered)
+
+  // Generate report data
+  const processed: PropertyCounter = {}
+  filteredValues.forEach((el) => {
+
+    // Merge static and dynamic data
+    const mergedEl = {
+      ...el,
+      ...staticData[el.id]
+    }
+
+    // Loop over properties
+    Object.entries(mergedEl).forEach(([key, value]) => {
+
+      // Ignore "uuid" (unique identifier in static data),
+      //  "id" (link dynamic to static data) and
+      //  "timestamp" (only used for time filtering)
+      switch (key) {
+        case "uuid":
+        case "id":
+        case "timestamp":
+          return
+      }
+
+      const valueCounter = processed[key] ?? {}
+      if (typeof value === "object") {
+        // Property that can have combination of multiple values
+        Object.entries(value as any).forEach(([innerValue, isActive]) => {
+          if (isActive) {
+            if (typeof valueCounter[innerValue] === "undefined") valueCounter[innerValue] = 0
+            valueCounter[innerValue]++
+          }
+        })
+      } else {
+        // Property that can only have single value
+        if (typeof valueCounter[value as any] === "undefined") valueCounter[value as any] = 0
+        valueCounter[value as any]++
+      }
+      processed[key] = valueCounter
+    })
+  })
+
+  return {
+    total: filteredValues.length,
+    properties: processed
+  }
+}
+
+const parseNumber = (queryParam: string, fallback: number): number => {
+  const parsed = parseInt(queryParam)
+  return isNaN(parsed) ? fallback : parsed
+}
+
 const lastTextId = Object.keys(staticDb.data.static).pop()
 let lastId = lastTextId && parseInt(lastTextId) || 0
 let shouldSaveStatic = false
@@ -121,63 +207,42 @@ app.get("/api/reports", async (req, res) => {
 
   // Unique id's since given "since" query parameter, fallback to 3 days back
   const current = Date.now()
-  const since = querySince ? querySince : current - 3 * 24 * 60 * 60 * 1000
-  const filtered: any = {}
-  const length = reports.length
-  for (let i = length - 1; i > 0; i--) {
-    const report = reports[i]
-    if (report.timestamp >= since) {
-      if (!filtered[report.id]) filtered[report.id] = report
-    } else {
-      break
-    }
+  const fromTimestamp = querySince ? querySince : current - 3 * 24 * 60 * 60 * 1000
+  const toTimestamp = current
+
+  const stats = getStats(reports, staticData, fromTimestamp, toTimestamp)
+
+  res.send(stats)
+});
+
+app.get("/api/history", async (req, res) => {
+
+  // Query param
+  const range = parseNumber(req.query.range as any, 3 * 24 * 60 * 60 * 1000)
+  const limit = parseNumber(req.query.limit as any, 100)
+
+  // Raw data
+  const reports = dynamicDb.data.dynamic
+  const staticData = staticDb.data.static
+
+  const now = Date.now()
+  const history: { [key: number]: Stats } = {}
+  let current = now - range
+  let count = 0
+  while (true) {
+
+    const stats = getStats(reports, staticData, current, current + range)
+
+    if (!stats) break
+
+    history[current] = stats
+
+    if (++count > limit) break
+
+    current -= range;
   }
-  const filteredValues: any[] = Object.values(filtered)
 
-  // Generate report data
-  const processed: any = {}
-  filteredValues.forEach((el) => {
-
-    // Merge static and dynamic data
-    const mergedEl = {
-      ...el,
-      ...staticData[el.id]
-    }
-
-    // Loop over properties
-    Object.entries(mergedEl).forEach(([key, value]) => {
-
-      // Ignore "uuid" (unique identifier in static data),
-      //  "id" (link dynamic to static data) and
-      //  "timestamp" (only used for time filtering)
-      switch (key) {
-        case "uuid":
-        case "id":
-        case "timestamp":
-          return
-      }
-
-      const valueCounter = processed[key] ?? {}
-      if (typeof value === "object") {
-        // Property that can have combination of multiple values
-        Object.entries(value as any).forEach(([innerValue, isActive]) => {
-          if (isActive) {
-            if (typeof valueCounter[innerValue] === "undefined") valueCounter[innerValue] = 0
-            valueCounter[innerValue]++
-          }
-        })
-      } else {
-        // Property that can only have single value
-        if (typeof valueCounter[value as any] === "undefined") valueCounter[value as any] = 0
-        valueCounter[value as any]++
-      }
-      processed[key] = valueCounter
-    })
-  })
-  res.send({
-    total: filteredValues.length,
-    properties: processed
-  })
+  res.send(history)
 });
 
 // Serve static webpage
