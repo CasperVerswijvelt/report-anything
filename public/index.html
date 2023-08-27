@@ -5,8 +5,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width" />
     <title>Report anything</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="3rdparty/chart.min.js"></script>
+    <script src="3rdparty/chartjs-plugin-datalabels.js"></script>
 
     <style>
       /* Generic */
@@ -44,6 +44,34 @@
       }
       #count:empty::before {
         content: "…";
+      }
+      #count.loading {
+        opacity: .5;
+      }
+      #chart-toggle {
+        background-color: rgba(0, 0, 0);
+        opacity: .3;
+        -webkit-mask: url(svg/bar_chart.svg) center calc(100% - -1px) no-repeat;
+        mask: url(svg/bar_chart.svg) center calc(100% - -1px) no-repeat;
+        -webkit-mask-size: 76%;
+        mask-size: 76%;
+        height: 30px;
+        width: 30px;
+        display: inline-block;
+        margin-left: 2px;
+        cursor: pointer;
+        transition: opacity .2s;
+      }
+      #chart-toggle:hover {
+        opacity: .6;
+      }
+      #chart-toggle:active {
+        opacity: .7;
+        transition: none;
+      }
+      #chart-toggle.toggled {
+        -webkit-mask-image: url(svg/line_chart.svg);
+        mask-image: url(svg/line_chart.svg);
       }
 
       /* charts section */
@@ -206,7 +234,12 @@
     </style>
   </head>
   <body>
-    <h1 class="title">Total: <span id="count"></span></h1>
+    <h1 class="title">Total: 
+      <span id="count"></span>
+      <div 
+        id="chart-toggle"
+        onclick="toggleHistory()"></div>
+    </h1>
     <div class="timeperiod-selector">
       <label>
         <input type="radio" name="period" onclick="setTimePeriod(7)" />
@@ -233,11 +266,13 @@
       Chart.register(ChartDataLabels);
 
       let lastRequestId = 0;
-      getReports(3);
+      let useHistoryCharts = false;
+      let lastDays
+      setTimePeriod(3);
 
       function getReports(days) {
         document.getElementById("charts").innerHTML = "";
-        document.getElementById("count").innerText = "";
+        document.getElementById("count").classList.toggle('loading', true);
         setOverlay(true, false);
         const requestId = ++lastRequestId;
         fetch(`/api/reports?since=${Date.now() - days * 24 * 60 * 60 * 1000}`)
@@ -260,7 +295,9 @@
       function handleReports(reports) {
         setOverlay(false, false);
         // Visualize total unique instances in last 3 days
-        document.getElementById("count").innerText = reports.total;
+        const countEl = document.getElementById("count")
+        countEl.classList.toggle('loading', false);
+        countEl.innerText = reports.total;
 
         const fragment = document.createDocumentFragment();
         const entries = Object.entries(reports.properties);
@@ -324,7 +361,7 @@
 
       function getHistory(days, limit) {
         document.getElementById("charts").innerHTML = "";
-        document.getElementById("count").innerText = "";
+        document.getElementById("count").classList.toggle("loading", true);
         setOverlay(true, false);
         const requestId = ++lastRequestId;
         fetch(`/api/history?range=${1000 * 60 * 60 * 24 * days}&limit=${limit}`)
@@ -346,12 +383,15 @@
 
       function handleHistory(history) {
         setOverlay(false, false);
-        document.getElementById("count").innerText = "History";
 
         const fragment = document.createDocumentFragment();
 
         const sortedHistoryEntries = Object.entries(history)
           .sort(([keyA, valueA], [keyB, valueB]) => keyA - keyB)
+
+        const countEl = document.getElementById("count")
+        countEl.classList.toggle('loading', false);
+        countEl.innerText = sortedHistoryEntries[sortedHistoryEntries.length - 1]?.[1]?.total;
 
         const labels = sortedHistoryEntries.map(([key, value]) => {
           return new Date(parseInt(key)).toISOString().slice(0, 10)
@@ -507,7 +547,23 @@
       }
 
       function setTimePeriod(days) {
-        getHistory(days, (365 * 2)/ days);
+        lastDays = days
+        loadData()
+      }
+
+      function loadData() {
+        if (useHistoryCharts) {
+          getHistory(lastDays, (365 * 2) / lastDays);
+        } else {
+          getReports(lastDays)
+        }
+      }
+
+      function toggleHistory() {
+        useHistoryCharts = !useHistoryCharts
+        console.log(document.getElementById('chart-toggle'))
+        document.getElementById('chart-toggle').classList.toggle("toggled", useHistoryCharts)
+        loadData()
       }
     </script>
   </body>
