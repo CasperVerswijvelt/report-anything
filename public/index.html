@@ -263,11 +263,9 @@
         const entries = Object.entries(reports.properties);
         const length = entries.length;
         Object.entries(reports.properties).forEach(([property, value]) => {
-          console.log(Object.entries(value).sort(([k1, v1], [k2, v2]) => v2 - v1))
           const limitedValue = Object.fromEntries(
             Object.entries(value).sort(([k1, v1], [k2, v2]) => v2 - v1).slice(0, 10)
           )
-          console.log(limitedValue)
           const chartElement = document.createElement("canvas");
           const chart = new Chart(chartElement.getContext("2d"), {
             plugins: [ChartDataLabels],
@@ -289,6 +287,9 @@
                     stepSize: 1,
                   },
                 },
+              },
+              interaction: {
+                intersect: false
               },
               plugins: {
                 legend: {
@@ -318,6 +319,126 @@
         document.getElementById("charts").appendChild(fragment);
       }
 
+      function getHistory(days) {
+        document.getElementById("charts").innerHTML = "";
+        document.getElementById("count").innerText = "";
+        setOverlay(true, false);
+        const requestId = ++lastRequestId;
+        fetch(`/api/history?range=${1000 * 60 * 60 * 24 * days}`)
+          .then((response) => response.json())
+          .then(onReports, onError);
+
+        function onReports(reports) {
+          // Discard data if new request was started in meantime
+          if (requestId === lastRequestId) {
+            handleHistory(reports);
+          }
+        }
+
+        function onError(error) {
+          setOverlay(false, true);
+          document.getElementById("error-message").innerText = error;
+        }
+      }
+
+      function handleHistory(history) {
+        setOverlay(false, false);
+        document.getElementById("count").innerText = "History";
+
+        const fragment = document.createDocumentFragment();
+
+        const properties = Object.values(history).reduce((acc, curr) => {
+          Object.keys(curr.properties).forEach(el => {
+            if (!acc.includes(el)) acc.push(el)
+          })
+          return acc
+        }, [])
+
+        properties.forEach(property => {
+          
+          // Top 10 values to show
+          const values = Object.entries(
+            Object.values(history)
+              .map(el => el.properties[property] ? Object.entries(el.properties[property]) : null)
+              .filter(Boolean)
+              .reduce((acc, entries) => {
+                entries.forEach(([key, value]) => {
+                  if (!(key in acc) || value > acc[key]) acc[key] = value
+                })
+                return acc
+              }, {})
+          )
+            .sort(([keyA, a], [keyB, b]) => {
+              return b - a
+            })
+            .slice(0, 10)
+            .map(([key, value]) => key)
+          
+          const datasets = values.map(valueKey => {
+            return {
+              label: valueKey,
+              data: Object.entries(history)
+                .sort(([keyA, valueA], [keyB, valueB]) => keyA - keyB)
+                .map(([key, value]) => value.properties[property]?.[valueKey]),
+              fill: false,
+              borderColor: getRandomColor(),
+              pointRadius: 0
+            }
+          })
+          
+          const chartElement = document.createElement("canvas");
+          const chart = new Chart(chartElement.getContext("2d"), {
+            plugins: [ChartDataLabels],
+            type: "line",
+            data: {
+              labels: Object.keys(history).map(el => {
+                return new Date(parseInt(el)).toISOString().slice(0, 10)
+              }),
+              datasets: datasets,
+            },
+            options: {
+              scales: {
+                y: {
+                  ticks: {
+                    stepSize: 1,
+                  },
+                },
+              },
+              interaction: {
+                mode: 'index',
+                intersect: false
+              },
+              plugins: {
+                legend: {
+                  display: false,
+                },
+                tooltip: {
+                  position: 'nearest'
+                },
+                title: {
+                  display: true,
+                  text: property,
+                  padding: {
+                    top: 10,
+                    bottom: 20,
+                  },
+                },
+                datalabels: {
+                  display: false
+                },
+              },
+            },
+          });
+          
+          const chartContainer = document.createElement("div");
+          chartContainer.setAttribute("class", "chart");
+          chartContainer.appendChild(chartElement);
+          fragment.appendChild(chartContainer);
+        })
+
+        document.getElementById("charts").appendChild(fragment);
+      }
+
       function setOverlay(loading, error) {
         document.body.classList.toggle("loading", loading);
         document.body.classList.toggle("error", error);
@@ -336,7 +457,7 @@
       }
 
       function setTimePeriod(days) {
-        getReports(days);
+        getHistory(days);
       }
     </script>
   </body>
