@@ -83,6 +83,9 @@
         #charts {
           grid-template-columns: repeat(2, 1fr);
         }
+        .chart-xl {
+          grid-column: 1 / span 2;
+        }
       }
 
       /* Time period selector */
@@ -319,12 +322,12 @@
         document.getElementById("charts").appendChild(fragment);
       }
 
-      function getHistory(days) {
+      function getHistory(days, limit) {
         document.getElementById("charts").innerHTML = "";
         document.getElementById("count").innerText = "";
         setOverlay(true, false);
         const requestId = ++lastRequestId;
-        fetch(`/api/history?range=${1000 * 60 * 60 * 24 * days}`)
+        fetch(`/api/history?range=${1000 * 60 * 60 * 24 * days}&limit=${limit}`)
           .then((response) => response.json())
           .then(onReports, onError);
 
@@ -347,8 +350,64 @@
 
         const fragment = document.createDocumentFragment();
 
-        const properties = Object.values(history).reduce((acc, curr) => {
-          Object.keys(curr.properties).forEach(el => {
+        const sortedHistoryEntries = Object.entries(history)
+          .sort(([keyA, valueA], [keyB, valueB]) => keyA - keyB)
+
+        const labels = sortedHistoryEntries.map(([key, value]) => {
+          return new Date(parseInt(key)).toISOString().slice(0, 10)
+        })
+
+        // General chart
+        const chartElement = document.createElement("canvas");
+        const chart = new Chart(chartElement.getContext("2d"), {
+          plugins: [ChartDataLabels],
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'total',
+              data: sortedHistoryEntries.map(([key, value]) => value.total),
+              fill: false,
+              borderColor: getRandomColor(1),
+              pointRadius: 0
+            }]
+          },
+          options: {
+            aspectRatio: 2,
+            interaction: {
+              mode: 'index',
+              intersect: false
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                position: 'nearest'
+              },
+              title: {
+                display: true,
+                text: 'Total',
+                padding: {
+                  top: 10,
+                  bottom: 20,
+                },
+              },
+              datalabels: {
+                display: false
+              },
+            },
+          },
+        });
+        
+        const chartContainer = document.createElement("div");
+        chartContainer.setAttribute("class", "chart chart-xl");
+        chartContainer.appendChild(chartElement);
+        fragment.appendChild(chartContainer);
+
+        // Property charts
+        const properties = sortedHistoryEntries.reduce((acc, [key, value]) => {
+          Object.keys(value.properties).forEach(el => {
             if (!acc.includes(el)) acc.push(el)
           })
           return acc
@@ -358,8 +417,8 @@
           
           // Top 10 values to show
           const values = Object.entries(
-            Object.values(history)
-              .map(el => el.properties[property] ? Object.entries(el.properties[property]) : null)
+            sortedHistoryEntries
+              .map(([key, value]) => value.properties[property] ? Object.entries(value.properties[property]) : null)
               .filter(Boolean)
               .reduce((acc, entries) => {
                 entries.forEach(([key, value]) => {
@@ -377,8 +436,7 @@
           const datasets = values.map(valueKey => {
             return {
               label: valueKey,
-              data: Object.entries(history)
-                .sort(([keyA, valueA], [keyB, valueB]) => keyA - keyB)
+              data: sortedHistoryEntries
                 .map(([key, value]) => value.properties[property]?.[valueKey]),
               fill: false,
               borderColor: getRandomColor(),
@@ -391,19 +449,11 @@
             plugins: [ChartDataLabels],
             type: "line",
             data: {
-              labels: Object.keys(history).map(el => {
-                return new Date(parseInt(el)).toISOString().slice(0, 10)
-              }),
+              labels: labels,
               datasets: datasets,
             },
             options: {
-              scales: {
-                y: {
-                  ticks: {
-                    stepSize: 1,
-                  },
-                },
-              },
+              aspectRatio: 1.35,
               interaction: {
                 mode: 'index',
                 intersect: false
@@ -457,7 +507,7 @@
       }
 
       function setTimePeriod(days) {
-        getHistory(days);
+        getHistory(days, (365 * 2)/ days);
       }
     </script>
   </body>
